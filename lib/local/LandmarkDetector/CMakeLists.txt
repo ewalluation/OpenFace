@@ -3,8 +3,7 @@ include_directories(${TBB_ROOT_DIR}/include)
 
 include_directories(${BOOST_INCLUDE_DIR})
 
-#OpenBlas library
-include_directories(../../3rdParty/OpenBLAS/include)
+INCLUDE_DIRECTORIES(${ipaaca_INCLUDE_DIRS})
 
 SET(SOURCE
     src/CCNF_patch_expert.cpp
@@ -18,6 +17,7 @@ SET(SOURCE
     src/PDM.cpp
 	src/SVR_patch_expert.cpp
 	src/stdafx.cpp
+    src/ipaacaadapter.cpp
 )
 
 SET(HEADERS
@@ -33,6 +33,7 @@ SET(HEADERS
 	include/PDM.h
 	include/SVR_patch_expert.h		
 	include/stdafx.h
+    include/ipaacaadapter.h
 )
 
 include_directories(./include)

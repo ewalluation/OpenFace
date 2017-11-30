@@ -1,4 +1,4 @@
-function [output_dir] = run_ict_experiment(rootDir, ictDir, verbose, varargin)
+function [output_dir] = run_ict_experiment(rootDir, ictDir, verbose, depth, varargin)
 %EVALUATEICTDATABASE Summary of this function goes here
 %   Detailed explanation goes here
 
@@ -12,6 +12,10 @@ output_dir = 'experiments/ict_out';
 
 dbSeqDir = dir([rootDir ictDir]);
    
+if(depth)
+    output_dir = cat(2, output_dir, '_depth');
+end
+
 output_dir = cat(2, output_dir, '/');
 
 numTogether = 10;
@@ -33,7 +37,12 @@ for i=3:numTogether:numel(dbSeqDir)
         outputFile = [output_dir dbSeqDir(i+n).name '.txt'];
         
         command = cat(2, command,  [' -f "' inputFile '" -of "' outputFile  '" ']);
-                
+        
+        if(depth)
+            dDir = [ictDir dbSeqDir(i+n).name '/depthAligned/'];
+            command = cat(2, command, [' -fd "' dDir '"']);
+        end
+        
         if(verbose)
             outputVideo = [output_dir dbSeqDir(i+n).name '.avi'];
             command = cat(2, command, [' -ov "' outputVideo '"']);

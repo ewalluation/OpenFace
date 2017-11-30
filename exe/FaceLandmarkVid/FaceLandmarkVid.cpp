@@ -36,6 +36,8 @@
 // Libraries for landmark detection (includes CLNF and CLM modules)
 #include "LandmarkCoreIncludes.h"
 #include "GazeEstimation.h"
+#include "ipaacaadapter.h"
+#include "alternativesmoother.h"
 
 #include <fstream>
 #include <sstream>
@@ -50,6 +52,13 @@
 #include <filesystem.hpp>
 #include <filesystem/fstream.hpp>
 
+// Timestamp includes
+#include <chrono>
+#include <ctime>
+
+// Signal handling include
+#include <signal.h>
+
 #define INFO_STREAM( stream ) \
 std::cout << stream << std::endl
 
@@ -58,6 +67,14 @@ std::cout << "Warning: " << stream << std::endl
 
 #define ERROR_STREAM( stream ) \
 std::cout << "Error: " << stream << std::endl
+
+IpaacaAdapter ipaaca_hyp_sender;
+
+bool process_killed = 0;
+void sigint(int a)
+{
+    process_killed = 1;
+}
 
 static void printErrorAndAbort( const std::string & error )
 {
@@ -86,6 +103,8 @@ vector<string> get_arguments(int argc, char **argv)
 double fps_tracker = -1.0;
 int64 t0 = 0;
 
+
+
 // Visualising the results
 void visualise_tracking(cv::Mat& captured_image, const LandmarkDetector::CLNF& face_model, const LandmarkDetector::FaceModelParameters& det_parameters, cv::Point3f gazeDirection0, cv::Point3f gazeDirection1, int frame_count, double fx, double fy, double cx, double cy)
 {
@@ -112,14 +131,14 @@ void visualise_tracking(cv::Mat& captured_image, const LandmarkDetector::CLNF& f
 		// A rough heuristic for box around the face width
 		int thickness = (int)std::ceil(2.0* ((double)captured_image.cols) / 640.0);
 
-		cv::Vec6d pose_estimate_to_draw = LandmarkDetector::GetPose(face_model, fx, fy, cx, cy);
+		cv::Vec6d pose_estimate_to_draw = LandmarkDetector::GetCorrectedPoseWorld(face_model, fx, fy, cx, cy);
 
 		// Draw it in reddish if uncertain, blueish if certain
 		LandmarkDetector::DrawBox(captured_image, pose_estimate_to_draw, cv::Scalar((1 - vis_certainty)*255.0, 0, vis_certainty * 255), thickness, fx, fy, cx, cy);
 		
 		if (det_parameters.track_gaze && detection_success && face_model.eye_model)
 		{
-			GazeAnalysis::DrawGaze(captured_image, face_model, gazeDirection0, gazeDirection1, fx, fy, cx, cy);
+			FaceAnalysis::DrawGaze(captured_image, face_model, gazeDirection0, gazeDirection1, fx, fy, cx, cy);
 		}
 	}
 
@@ -161,8 +180,9 @@ int main (int argc, char **argv)
 	// Get the input output file parameters
 	
 	// Indicates that rotation should be with respect to world or camera coordinates
+	bool u;
 	string output_codec;
-	LandmarkDetector::get_video_input_output_params(files, out_dummy, output_video_files, output_codec, arguments);
+	LandmarkDetector::get_video_input_output_params(files, out_dummy, output_video_files, u, output_codec, arguments);
 	
 	// The modules that are being used for tracking
 	LandmarkDetector::CLNF clnf_model(det_parameters.model_location);	
@@ -194,7 +214,7 @@ int main (int argc, char **argv)
 	{
 		
 		string current_file;
-
+        std::cout << current_file << std::endl;
 		// We might specify multiple video files as arguments
 		if(files.size() > 0)
 		{
@@ -224,20 +244,26 @@ int main (int argc, char **argv)
 		}
 		else
 		{
-			INFO_STREAM( "Attempting to capture from device: " << device );
-			video_capture = cv::VideoCapture( device );
+            INFO_STREAM( "Attempting to capture from device: " << device );
+            //video_capture = cv::VideoCapture( device );
+            video_capture = cv::VideoCapture( "shmsrc socket-path=/tmp/videostream0 ! video/x-raw,width=640,height=480,format=BGRA, color-matrix=sdtv, chroma-site=mpeg, framerate=30/1 ! queue max-size-time=500000000 leaky=2 ! videoconvert ! appsink" );
 
 			// Read a first frame often empty in camera
 			cv::Mat captured_image;
 			video_capture >> captured_image;
 		}
 
-		if (!video_capture.isOpened())
+        while (!video_capture.isOpened())
 		{
-			FATAL_STREAM("Failed to open video source");
-			return 1;
-		}
-		else INFO_STREAM( "Device or file opened");
+            /* Hack to wait for video */
+            video_capture = cv::VideoCapture( "shmsrc socket-path=/tmp/videostream0 ! video/x-raw,width=640,height=480,format=BGRA, color-matrix=sdtv, chroma-site=mpeg, framerate=30/1 ! queue max-size-time=500000000 leaky=2 ! videoconvert ! appsink" );
+            // Read a first frame often empty in camera
+            cv::Mat captured_image;
+            video_capture >> captured_image;
+            //FATAL_STREAM("Failed to open video source");
+            //return 1;
+        }
+        INFO_STREAM( "Device or file opened");
 
 		cv::Mat captured_image;
 		video_capture >> captured_image;		
@@ -276,6 +302,11 @@ int main (int argc, char **argv)
 
 		// Use for timestamping if using a webcam
 		int64 t_initial = cv::getTickCount();
+        // User for calc smoothed derivatives
+        AlternativeSmoother verticalHeadposeSmoother;
+        AlternativeSmoother horizontalHeadposeSmoother;
+        AlternativeSmoother rotationalHeadposeSmoother;
+        signal(SIGINT, sigint);
 
 		INFO_STREAM( "Starting tracking");
 		while(!captured_image.empty())
@@ -306,12 +337,72 @@ int main (int argc, char **argv)
 
 			if (det_parameters.track_gaze && detection_success && clnf_model.eye_model)
 			{
-				GazeAnalysis::EstimateGaze(clnf_model, gazeDirection0, fx, fy, cx, cy, true);
-				GazeAnalysis::EstimateGaze(clnf_model, gazeDirection1, fx, fy, cx, cy, false);
+				FaceAnalysis::EstimateGaze(clnf_model, gazeDirection0, fx, fy, cx, cy, true);
+				FaceAnalysis::EstimateGaze(clnf_model, gazeDirection1, fx, fy, cx, cy, false);
 			}
 
 			visualise_tracking(captured_image, clnf_model, det_parameters, gazeDirection0, gazeDirection1, frame_count, fx, fy, cx, cy);
-			
+            //std::cout << "frame" << std::endl;
+            ///std::cout << clnf_model.detected_landmarks << std::endl;
+            std::cout << clnf_model.GetBoundingBox() << "\t" << detection_success << std::endl;
+            std::cout << "----------------" << std::endl;
+
+            /// boundingbox vector
+            std::vector<double> vec_facerect;
+            vec_facerect.push_back(clnf_model.GetBoundingBox().width);
+            vec_facerect.push_back(clnf_model.GetBoundingBox().height);
+            vec_facerect.push_back(clnf_model.GetBoundingBox().x);
+            vec_facerect.push_back(clnf_model.GetBoundingBox().y);
+
+            /// 68 landmark vector
+            std::vector<double> vec_landmarks;
+            for (int i=0; i<clnf_model.detected_landmarks.size[0]; i++) vec_landmarks.push_back(clnf_model.detected_landmarks.at<double>(0,i));
+
+            /// 3 angles
+            std::vector<double> vec_angles3d, vec_derivates3d;
+            cv::Vec6d pose_estimate_to_draw = LandmarkDetector::GetCorrectedPoseWorld( clnf_model, fx, fy, cx, cy);
+            boost::optional<double> vertHeadpose = pose_estimate_to_draw(3) * 180.0 / 3.14;
+            boost::optional<double> horizHeadpose = pose_estimate_to_draw(4) * 180.0 / 3.14;
+            boost::optional<double> rotHeadpose = pose_estimate_to_draw(5) * 180.0 / 3.14;
+
+            verticalHeadposeSmoother.refreshQueue( vertHeadpose );
+            horizontalHeadposeSmoother.refreshQueue( horizHeadpose );
+            rotationalHeadposeSmoother.refreshQueue( rotHeadpose );
+
+            boost::optional<double> vertHeadposeDer;
+            boost::optional<double> horizHeadposeDer;
+            boost::optional<double> rotHeadposeDer;
+
+            verticalHeadposeSmoother.estimateDerivation( vertHeadposeDer );
+            horizontalHeadposeSmoother.estimateDerivation( horizHeadposeDer );
+            rotationalHeadposeSmoother.estimateDerivation( rotHeadposeDer );
+            vec_angles3d.push_back( vertHeadpose.get() ); // nicken
+            vec_angles3d.push_back( horizHeadpose.get() ); // schuetteln
+            vec_angles3d.push_back( rotHeadpose.get() ); // drehen,rotieren
+
+            vec_derivates3d.push_back( vertHeadposeDer.get() ); // nicken abl.
+            vec_derivates3d.push_back( horizHeadposeDer.get() ); // schuetteln abl.
+            vec_derivates3d.push_back( rotHeadposeDer.get() ); // drehen,rotieren abl.
+
+            std::cout << "(" << vec_angles3d.at(0) << "|" << vec_derivates3d.at(0) << ")\t" << vec_angles3d.at(1) << "\t" << vec_angles3d.at(2) << "\tJO!" << std::endl;
+
+            /// time stamp
+            auto now = std::chrono::system_clock::now();
+            auto now_ms = std::chrono::time_point_cast<std::chrono::milliseconds>(now);
+            auto value = now_ms.time_since_epoch();
+            long reduced_timestamp = value.count() - 1511900000000;
+            std::cout << "reduced_timestamp: " << reduced_timestamp << std::endl;
+
+
+            std::cout << "\t\t\t\t\t\t\t\t" << detection_certainty << std::endl;
+
+            if (process_killed) {
+                ipaaca_hyp_sender.sendTerminate(process_killed);
+                std::cout << "Successfull terminated." << std::endl;
+                exit(1);
+            } else if (sqrt(detection_certainty*detection_certainty)>=0.5) ipaaca_hyp_sender.sendMessage( reduced_timestamp, detection_success, vec_facerect, vec_landmarks, vec_angles3d, vec_derivates3d );
+
+
 			// output the tracked video
 			if (!output_video_files.empty())
 			{

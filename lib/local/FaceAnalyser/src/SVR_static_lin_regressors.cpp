@@ -32,9 +32,9 @@
 //
 ///////////////////////////////////////////////////////////////////////////////
 
-#include "Face_utils.h"
-
 #include "SVR_static_lin_regressors.h"
+
+#include "LandmarkCoreIncludes.h"
 
 using namespace FaceAnalysis;
 
@@ -43,20 +43,20 @@ void SVR_static_lin_regressors::Read(std::ifstream& stream, const std::vector<st
 
 	if(this->means.empty())
 	{
-		ReadMatBin(stream, this->means);
+		LandmarkDetector::ReadMatBin(stream, this->means);
 	}
 	else
 	{
 		cv::Mat_<double> m_tmp;
-		ReadMatBin(stream, m_tmp);
+		LandmarkDetector::ReadMatBin(stream, m_tmp);
 		if(cv::norm(m_tmp - this->means > 0.00001))
 		{
-			std::cout << "Something went wrong with the SVR static regressors" << std::endl;
+			cout << "Something went wrong with the SVR static regressors" << endl;
 		}
 	}
 
 	cv::Mat_<double> support_vectors_curr;
-	ReadMatBin(stream, support_vectors_curr);
+	LandmarkDetector::ReadMatBin(stream, support_vectors_curr);
 
 	double bias;
 	stream.read((char *)&bias, 8);

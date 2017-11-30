@@ -160,16 +160,15 @@ void write_out_pose_landmarks(const string& outfeatures, const cv::Mat_<double>&
 		featuresFile << "}" << endl;
 
 		// Do the pose and eye gaze if present as well
-		featuresFile << "gaze_vec: dir_x_1, dir_y_1, dir_z_1, dir_x_2, dir_y_2, dir_z_2: " << endl;
+		featuresFile << "gaze: dir_x_1, dir_y_1, dir_z_1, dir_x_2, dir_y_2, dir_z_2: " << endl;
 		featuresFile << "{" << endl;
 		featuresFile << gaze0.x << " " << gaze0.y << " " << gaze0.z << " " << gaze1.x << " " << gaze1.y << " " << gaze1.z << endl;
 		featuresFile << "}" << endl;
-
 		featuresFile.close();
 	}
 }
 
-void write_out_landmarks(const string& outfeatures, const LandmarkDetector::CLNF& clnf_model, const cv::Vec6d& pose, const cv::Point3f& gaze0, const cv::Point3f& gaze1, const cv::Vec2d gaze_angle, std::vector<std::pair<std::string, double>> au_intensities, std::vector<std::pair<std::string, double>> au_occurences, bool output_gaze)
+void write_out_landmarks(const string& outfeatures, const LandmarkDetector::CLNF& clnf_model, const cv::Vec6d& pose, const cv::Point3f& gaze0, const cv::Point3f& gaze1, std::vector<std::pair<std::string, double>> au_intensities, std::vector<std::pair<std::string, double>> au_occurences)
 {
 	create_directory_from_file(outfeatures);
 	std::ofstream featuresFile;
@@ -178,7 +177,7 @@ void write_out_landmarks(const string& outfeatures, const LandmarkDetector::CLNF
 	if (featuresFile.is_open())
 	{
 		int n = clnf_model.patch_experts.visibilities[0][0].rows;
-		featuresFile << "version: 2" << endl;
+		featuresFile << "version: 1" << endl;
 		featuresFile << "npoints: " << n << endl;
 		featuresFile << "{" << endl;
 
@@ -195,30 +194,12 @@ void write_out_landmarks(const string& outfeatures, const LandmarkDetector::CLNF
 		featuresFile << pose[3] << " " << pose[4] << " " << pose[5] << endl;
 		featuresFile << "}" << endl;
 
-		if(output_gaze)
-		{
-			featuresFile << "gaze: dir_x_1, dir_y_1, dir_z_1, dir_x_2, dir_y_2, dir_z_2: " << endl;
-			featuresFile << "{" << endl;
-			featuresFile << gaze0.x << " " << gaze0.y << " " << gaze0.z << " " << gaze1.x << " " << gaze1.y << " " << gaze1.z << endl;
-			featuresFile << "}" << endl;
+		// Do the pose and eye gaze if present as well
+		featuresFile << "gaze: dir_x_1, dir_y_1, dir_z_1, dir_x_2, dir_y_2, dir_z_2: " << endl;
+		featuresFile << "{" << endl;
+		featuresFile << gaze0.x << " " << gaze0.y << " " << gaze0.z << " " << gaze1.x << " " << gaze1.y << " " << gaze1.z << endl;
+		featuresFile << "}" << endl;
 
-			featuresFile << "gaze: angle_x, angle_y: " << endl;
-			featuresFile << "{" << endl;
-			featuresFile << gaze_angle[0] << " " << gaze_angle[1] << endl;
-			featuresFile << "}" << endl;
-
-			std::vector<cv::Point2d> eye_landmark_points = LandmarkDetector::CalculateAllEyeLandmarks(clnf_model);
-
-			featuresFile << "eye_lmks: " << eye_landmark_points.size() << endl;
-			featuresFile << "{" << endl;
-
-			for (int i = 0; i < eye_landmark_points.size(); ++i)
-			{
-				// Use matlab format, so + 1
-				featuresFile << (eye_landmark_points[i].x + 1) << " " << (eye_landmark_points[i].y + 1) << endl;
-			}
-			featuresFile << "}" << endl;
-		}
 		// Do the au intensities
 		featuresFile << "au intensities: " << au_intensities.size() << endl;
 		featuresFile << "{" << endl;
@@ -316,6 +297,10 @@ int main (int argc, char **argv)
 	//Convert arguments to more convenient vector form
 	vector<string> arguments = get_arguments(argc, argv);
 
+	// Search paths
+	boost::filesystem::path config_path = boost::filesystem::path(CONFIG_DIR);
+	boost::filesystem::path parent_path = boost::filesystem::path(arguments[0]).parent_path();
+
 	// Some initial parameters that can be overriden from command line
 	vector<string> files, output_images, output_landmark_locations, output_pose_locations;
 
@@ -352,10 +337,50 @@ int main (int argc, char **argv)
 	cv::CascadeClassifier classifier(det_parameters.face_detector_location);
 	dlib::frontal_face_detector face_detector_hog = dlib::get_frontal_face_detector();
 
-	// Load facial feature extractor and AU analyser (make sure it is static)
-	FaceAnalysis::FaceAnalyserParameters face_analysis_params(arguments);
-	face_analysis_params.OptimizeForImages();
-	FaceAnalysis::FaceAnalyser face_analyser(face_analysis_params);
+	// Loading the AU prediction models
+	string au_loc = "AU_predictors/AU_all_static.txt";
+
+	boost::filesystem::path au_loc_path = boost::filesystem::path(au_loc);
+	if (boost::filesystem::exists(au_loc_path))
+	{
+		au_loc = au_loc_path.string();
+	}
+	else if (boost::filesystem::exists(parent_path/au_loc_path))
+	{
+		au_loc = (parent_path/au_loc_path).string();
+	}
+	else if (boost::filesystem::exists(config_path/au_loc_path))
+	{
+		au_loc = (config_path/au_loc_path).string();
+	}
+	else
+	{
+		cout << "Can't find AU prediction files, exiting" << endl;
+		return 1;
+	}
+
+	// Used for image masking for AUs
+	string tri_loc;
+	boost::filesystem::path tri_loc_path = boost::filesystem::path("model/tris_68_full.txt");
+	if (boost::filesystem::exists(tri_loc_path))
+	{
+		tri_loc = tri_loc_path.string();
+	}
+	else if (boost::filesystem::exists(parent_path/tri_loc_path))
+	{
+		tri_loc = (parent_path/tri_loc_path).string();
+	}
+	else if (boost::filesystem::exists(config_path/tri_loc_path))
+	{
+		tri_loc = (config_path/tri_loc_path).string();
+	}
+	else
+	{
+		cout << "Can't find triangulation files, exiting" << endl;
+		return 1;
+	}
+
+	FaceAnalysis::FaceAnalyser face_analyser(vector<cv::Vec3d>(), 0.7, 112, 112, au_loc, tri_loc);
 
 	bool visualise = !det_parameters.quiet_mode;
 
@@ -421,21 +446,20 @@ int main (int argc, char **argv)
 				bool success = LandmarkDetector::DetectLandmarksInImage(grayscale_image, face_detections[face], clnf_model, det_parameters);
 
 				// Estimate head pose and eye gaze				
-				cv::Vec6d headPose = LandmarkDetector::GetPose(clnf_model, fx, fy, cx, cy);
+				cv::Vec6d headPose = LandmarkDetector::GetCorrectedPoseWorld(clnf_model, fx, fy, cx, cy);
 
 				// Gaze tracking, absolute gaze direction
 				cv::Point3f gazeDirection0(0, 0, -1);
 				cv::Point3f gazeDirection1(0, 0, -1);
-				cv::Vec2d gazeAngle(0, 0);
 
 				if (success && det_parameters.track_gaze)
 				{
-					GazeAnalysis::EstimateGaze(clnf_model, gazeDirection0, fx, fy, cx, cy, true);
-					GazeAnalysis::EstimateGaze(clnf_model, gazeDirection1, fx, fy, cx, cy, false);
-					gazeAngle = GazeAnalysis::GetGazeAngle(gazeDirection0, gazeDirection1);
+					FaceAnalysis::EstimateGaze(clnf_model, gazeDirection0, fx, fy, cx, cy, true);
+					FaceAnalysis::EstimateGaze(clnf_model, gazeDirection1, fx, fy, cx, cy, false);
+
 				}
 
-				auto ActionUnits = face_analyser.PredictStaticAUs(read_image, clnf_model.detected_landmarks, false);
+				auto ActionUnits = face_analyser.PredictStaticAUs(read_image, clnf_model, false);
 
 				// Writing out the detected landmarks (in an OS independent manner)
 				if(!output_landmark_locations.empty())
@@ -453,7 +477,7 @@ int main (int argc, char **argv)
 					boost::filesystem::path fname = out_feat_path.filename().replace_extension("");
 					boost::filesystem::path ext = out_feat_path.extension();
 					string outfeatures = dir.string() + preferredSlash + fname.string() + string(name) + ext.string();
-					write_out_landmarks(outfeatures, clnf_model, headPose, gazeDirection0, gazeDirection1, gazeAngle,  ActionUnits.first, ActionUnits.second, det_parameters.track_gaze);
+					write_out_landmarks(outfeatures, clnf_model, headPose, gazeDirection0, gazeDirection1, ActionUnits.first, ActionUnits.second);
 				}
 
 				if (!output_pose_locations.empty())
@@ -477,11 +501,11 @@ int main (int argc, char **argv)
 
 				if (det_parameters.track_gaze)
 				{
-					cv::Vec6d pose_estimate_to_draw = LandmarkDetector::GetPose(clnf_model, fx, fy, cx, cy);
+					cv::Vec6d pose_estimate_to_draw = LandmarkDetector::GetCorrectedPoseWorld(clnf_model, fx, fy, cx, cy);
 
 					// Draw it in reddish if uncertain, blueish if certain
 					LandmarkDetector::DrawBox(read_image, pose_estimate_to_draw, cv::Scalar(255.0, 0, 0), 3, fx, fy, cx, cy);
-					GazeAnalysis::DrawGaze(read_image, clnf_model, gazeDirection0, gazeDirection1, fx, fy, cx, cy);
+					FaceAnalysis::DrawGaze(read_image, clnf_model, gazeDirection0, gazeDirection1, fx, fy, cx, cy);
 				}
 
 				// displaying detected landmarks
@@ -538,27 +562,25 @@ int main (int argc, char **argv)
 			LandmarkDetector::DetectLandmarksInImage(grayscale_image, bounding_boxes[i], clnf_model, det_parameters);
 
 			// Estimate head pose and eye gaze				
-			cv::Vec6d headPose = LandmarkDetector::GetPose(clnf_model, fx, fy, cx, cy);
+			cv::Vec6d headPose = LandmarkDetector::GetCorrectedPoseWorld(clnf_model, fx, fy, cx, cy);
 
 			// Gaze tracking, absolute gaze direction
 			cv::Point3f gazeDirection0(0, 0, -1);
 			cv::Point3f gazeDirection1(0, 0, -1);
-			cv::Vec2d gazeAngle(0, 0);
-
+			
 			if (det_parameters.track_gaze)
 			{
-				GazeAnalysis::EstimateGaze(clnf_model, gazeDirection0, fx, fy, cx, cy, true);
-				GazeAnalysis::EstimateGaze(clnf_model, gazeDirection1, fx, fy, cx, cy, false);
-				gazeAngle = GazeAnalysis::GetGazeAngle(gazeDirection0, gazeDirection1);
+				FaceAnalysis::EstimateGaze(clnf_model, gazeDirection0, fx, fy, cx, cy, true);
+				FaceAnalysis::EstimateGaze(clnf_model, gazeDirection1, fx, fy, cx, cy, false);
 			}
 
-			auto ActionUnits = face_analyser.PredictStaticAUs(read_image, clnf_model.detected_landmarks, false);
+			auto ActionUnits = face_analyser.PredictStaticAUs(read_image, clnf_model, false);
 
 			// Writing out the detected landmarks
 			if(!output_landmark_locations.empty())
 			{
 				string outfeatures = output_landmark_locations.at(i);
-				write_out_landmarks(outfeatures, clnf_model, headPose, gazeDirection0, gazeDirection1, gazeAngle, ActionUnits.first, ActionUnits.second, det_parameters.track_gaze);
+				write_out_landmarks(outfeatures, clnf_model, headPose, gazeDirection0, gazeDirection1, ActionUnits.first, ActionUnits.second);
 			}
 
 			// Writing out the detected landmarks
@@ -573,11 +595,11 @@ int main (int argc, char **argv)
 
 			if (det_parameters.track_gaze)
 			{
-				cv::Vec6d pose_estimate_to_draw = LandmarkDetector::GetPose(clnf_model, fx, fy, cx, cy);
+				cv::Vec6d pose_estimate_to_draw = LandmarkDetector::GetCorrectedPoseWorld(clnf_model, fx, fy, cx, cy);
 
 				// Draw it in reddish if uncertain, blueish if certain
 				LandmarkDetector::DrawBox(read_image, pose_estimate_to_draw, cv::Scalar(255.0, 0, 0), 3, fx, fy, cx, cy);
-				GazeAnalysis::DrawGaze(read_image, clnf_model, gazeDirection0, gazeDirection1, fx, fy, cx, cy);
+				FaceAnalysis::DrawGaze(read_image, clnf_model, gazeDirection0, gazeDirection1, fx, fy, cx, cy);
 			}
 
 			create_display_image(read_image, display_image, clnf_model);

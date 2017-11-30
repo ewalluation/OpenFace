@@ -53,7 +53,7 @@ namespace LandmarkDetector
 	// Helper functions for parsing the inputs
 	//=============================================================================================
 	void get_video_input_output_params(vector<string> &input_video_file, vector<string> &output_files,
-		vector<string> &output_video_files, string &output_codec, vector<string> &arguments);
+		vector<string> &output_video_files, bool& world_coordinates_pose, string &output_codec, vector<string> &arguments);
 
 	void get_camera_params(int &device, float &fx, float &fy, float &cx, float &cy, vector<string> &arguments);
 
@@ -89,13 +89,8 @@ namespace LandmarkDetector
 	vector<std::pair<cv::Point2d, cv::Point2d>> CalculateBox(cv::Vec6d pose, float fx, float fy, float cx, float cy);
 	void DrawBox(vector<pair<cv::Point, cv::Point>> lines, cv::Mat image, cv::Scalar color, int thickness);
 
-	vector<cv::Point2d> CalculateVisibleLandmarks(const cv::Mat_<double>& shape2D, const cv::Mat_<int>& visibilities);
-	vector<cv::Point2d> CalculateVisibleLandmarks(const CLNF& clnf_model);
-	vector<cv::Point2d> CalculateVisibleEyeLandmarks(const CLNF& clnf_model);
-
-	vector<cv::Point2d> CalculateAllLandmarks(const cv::Mat_<double>& shape2D);
-	vector<cv::Point2d> CalculateAllLandmarks(const CLNF& clnf_model);
-	vector<cv::Point2d> CalculateAllEyeLandmarks(const CLNF& clnf_model);
+	vector<cv::Point2d> CalculateLandmarks(const cv::Mat_<double>& shape2D, cv::Mat_<int>& visibilities);
+	vector<cv::Point2d> CalculateLandmarks(CLNF& clnf_model);
 	void DrawLandmarks(cv::Mat img, vector<cv::Point> landmarks);
 
 	void Draw(cv::Mat img, const cv::Mat_<double>& shape2D, const cv::Mat_<int>& visibilities);

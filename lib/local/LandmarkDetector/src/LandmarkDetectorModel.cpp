@@ -46,6 +46,8 @@
 // Local includes
 #include <LandmarkDetectorUtils.h>
 
+#include "ipaacaadapter.h"
+
 using namespace LandmarkDetector;
 
 //=============================================================================

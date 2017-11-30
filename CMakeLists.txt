@@ -9,9 +9,13 @@ set(CMAKE_CONFIG_DIR etc/OpenFace)
 set(CONFIG_DIR "${CMAKE_INSTALL_PREFIX}/${CMAKE_CONFIG_DIR}")
 add_definitions(-DCONFIG_DIR="${CONFIG_DIR}")
 
-find_package( BLAS REQUIRED )
-include_directories( ${BLAS_INCLUDE_DIRS} )
-LINK_DIRECTORIES(${BLAS_LIBRARY_DIRS})	
+### ipaaca
+find_package(ipaaca REQUIRED)
+MESSAGE("ipaaca information:")
+MESSAGE("  ipaaca_INCLUDE_DIRS: ${ipaaca_INCLUDE_DIRS}")
+MESSAGE("  ipaaca_LIBRARIES: ${ipaaca_LIBRARIES}")
+#INCLUDE_DIRECTORIES( ${ipaaca_INCLUDE_DIRS} )
+
 
 find_package( OpenCV REQUIRED )
 
@@ -72,18 +76,6 @@ foreach(file ${files})
 endforeach()
 
 file(GLOB files "lib/local/LandmarkDetector/model/patch_experts/*.txt")
-foreach(file ${files})
-	if (MSVC)
-		file(COPY ${file} DESTINATION ${CMAKE_BINARY_DIR}/bin/Debug/model/patch_experts)
-		file(COPY ${file} DESTINATION ${CMAKE_BINARY_DIR}/bin/Release/model/patch_experts)
-	else(MSVC)
-		file(COPY ${file} DESTINATION ${CMAKE_BINARY_DIR}/bin/model/patch_experts)
-	endif(MSVC)
-
-	install(FILES ${file} DESTINATION ${CMAKE_CONFIG_DIR}/model/patch_experts)
-endforeach()
-
-file(GLOB files "lib/local/LandmarkDetector/model/patch_experts/*.dat")
 foreach(file ${files})
 	if (MSVC)
 		file(COPY ${file} DESTINATION ${CMAKE_BINARY_DIR}/bin/Debug/model/patch_experts)
@@ -179,6 +171,10 @@ else()
 	INCLUDE_DIRECTORIES(${BOOST_INCLUDE_DIR})
 endif()
 
+#ipaaca
+#INCLUDE_DIRECTORIES(${ipaaca_INCLUDE_DIR})
+
+
 # dlib
 include_directories(lib/3rdParty/dlib/include)
 
@@ -189,8 +185,6 @@ add_subdirectory(lib/3rdParty/dlib)
 add_subdirectory(lib/local/LandmarkDetector)
 # Facial Expression analysis library
 add_subdirectory(lib/local/FaceAnalyser)
-# Gaze library
-add_subdirectory(lib/local/GazeAnalyser)
 # executables
 add_subdirectory(exe/FaceLandmarkImg)
 add_subdirectory(exe/FaceLandmarkVid)

@@ -1,8 +1,6 @@
 if(exist('D:/Datasets/Bosphorus/', 'file'))
     Bosphorus_dir = 'D:\Datasets\Bosphorus/';   
-elseif(exist('E:/Datasets/Bosphorus/', 'file'))
-    Bosphorus_dir = 'E:\Datasets\Bosphorus/';   
-else    
+else
     fprintf('Bosphorus dataset location not found (or not defined)\n'); 
 end
 

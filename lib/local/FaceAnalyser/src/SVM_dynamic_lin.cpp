@@ -31,9 +31,10 @@
 //       in IEEE Int. Conference on Computer Vision Workshops, 300 Faces in-the-Wild Challenge, 2013.    
 //
 ///////////////////////////////////////////////////////////////////////////////
-#include "Face_utils.h"
 
 #include "SVM_dynamic_lin.h"
+
+#include "LandmarkCoreIncludes.h"
 
 using namespace FaceAnalysis;
 
@@ -42,20 +43,20 @@ void SVM_dynamic_lin::Read(std::ifstream& stream, const std::vector<std::string>
 
 	if(this->means.empty())
 	{
-		ReadMatBin(stream, this->means);
+		LandmarkDetector::ReadMatBin(stream, this->means);
 	}
 	else
 	{
 		cv::Mat_<double> m_tmp;
-		ReadMatBin(stream, m_tmp);
+		LandmarkDetector::ReadMatBin(stream, m_tmp);
 		if(cv::norm(m_tmp - this->means > 0.00001))
 		{
-			std::cout << "Something went wrong with the SVM dynamic classifiers" << std::endl;
+			cout << "Something went wrong with the SVM dynamic classifiers" << endl;
 		}
 	}
 
 	cv::Mat_<double> support_vectors_curr;
-	ReadMatBin(stream, support_vectors_curr);
+	LandmarkDetector::ReadMatBin(stream, support_vectors_curr);
 
 	double bias;
 	stream.read((char *)&bias, 8);
