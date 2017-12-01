@@ -213,8 +213,7 @@ int main (int argc, char **argv)
 	while(!done) // this is not a for loop as we might also be reading from a webcam
 	{
 		
-		string current_file;
-        std::cout << current_file << std::endl;
+        string current_file;
 		// We might specify multiple video files as arguments
 		if(files.size() > 0)
 		{
@@ -240,13 +239,14 @@ int main (int argc, char **argv)
 			current_file = boost::filesystem::path(current_file).generic_string();
 
 			INFO_STREAM( "Attempting to read from file: " << current_file );
-			video_capture = cv::VideoCapture( current_file );
+            video_capture = cv::VideoCapture( current_file );
 		}
 		else
 		{
             INFO_STREAM( "Attempting to capture from device: " << device );
             //video_capture = cv::VideoCapture( device );
-            video_capture = cv::VideoCapture( "shmsrc socket-path=/tmp/videostream0 ! video/x-raw,width=640,height=480,format=BGRA, color-matrix=sdtv, chroma-site=mpeg, framerate=30/1 ! queue max-size-time=500000000 leaky=2 ! videoconvert ! appsink" );
+            video_capture = cv::VideoCapture( "\"" + arguments.at(1) + "\"");
+            //video_capture = cv::VideoCapture( "shmsrc socket-path=/tmp/videostream0 ! video/x-raw,width=640,height=480,format=BGRA, color-matrix=sdtv, chroma-site=mpeg, framerate=30/1 ! queue max-size-time=500000000 leaky=2 ! videoconvert ! appsink" );
 
 			// Read a first frame often empty in camera
 			cv::Mat captured_image;
@@ -256,7 +256,8 @@ int main (int argc, char **argv)
         while (!video_capture.isOpened())
 		{
             /* Hack to wait for video */
-            video_capture = cv::VideoCapture( "shmsrc socket-path=/tmp/videostream0 ! video/x-raw,width=640,height=480,format=BGRA, color-matrix=sdtv, chroma-site=mpeg, framerate=30/1 ! queue max-size-time=500000000 leaky=2 ! videoconvert ! appsink" );
+            //video_capture = cv::VideoCapture( "shmsrc socket-path=/tmp/videostream0 ! video/x-raw,width=640,height=480,format=BGRA, color-matrix=sdtv, chroma-site=mpeg, framerate=30/1 ! queue max-size-time=500000000 leaky=2 ! videoconvert ! appsink" );
+            video_capture = cv::VideoCapture( "\"" + arguments.at(1) + "\"");
             // Read a first frame often empty in camera
             cv::Mat captured_image;
             video_capture >> captured_image;
@@ -344,8 +345,8 @@ int main (int argc, char **argv)
 			visualise_tracking(captured_image, clnf_model, det_parameters, gazeDirection0, gazeDirection1, frame_count, fx, fy, cx, cy);
             //std::cout << "frame" << std::endl;
             ///std::cout << clnf_model.detected_landmarks << std::endl;
-            std::cout << clnf_model.GetBoundingBox() << "\t" << detection_success << std::endl;
-            std::cout << "----------------" << std::endl;
+            ///std::cout << clnf_model.GetBoundingBox() << "\t" << detection_success << std::endl;
+            ///std::cout << "----------------" << std::endl;
 
             /// boundingbox vector
             std::vector<double> vec_facerect;
@@ -384,17 +385,17 @@ int main (int argc, char **argv)
             vec_derivates3d.push_back( horizHeadposeDer.get() ); // schuetteln abl.
             vec_derivates3d.push_back( rotHeadposeDer.get() ); // drehen,rotieren abl.
 
-            std::cout << "(" << vec_angles3d.at(0) << "|" << vec_derivates3d.at(0) << ")\t" << vec_angles3d.at(1) << "\t" << vec_angles3d.at(2) << "\tJO!" << std::endl;
+            //std::cout << "(" << vec_angles3d.at(0) << "|" << vec_derivates3d.at(0) << ")\t" << vec_angles3d.at(1) << "\t" << vec_angles3d.at(2) << "\tJO!" << std::endl;
 
             /// time stamp
             auto now = std::chrono::system_clock::now();
             auto now_ms = std::chrono::time_point_cast<std::chrono::milliseconds>(now);
             auto value = now_ms.time_since_epoch();
             long reduced_timestamp = value.count() - 1511900000000;
-            std::cout << "reduced_timestamp: " << reduced_timestamp << std::endl;
+            //std::cout << "reduced_timestamp: " << reduced_timestamp << std::endl;
 
 
-            std::cout << "\t\t\t\t\t\t\t\t" << detection_certainty << std::endl;
+            //std::cout << "\t\t\t\t\t\t\t\t" << detection_certainty << std::endl;
 
             if (process_killed) {
                 ipaaca_hyp_sender.sendTerminate(process_killed);
